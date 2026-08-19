@@ -22,7 +22,7 @@ NO_PROGRESS_MSG = ("[stopped: no progress — the model kept emitting invalid, "
 
 _cfg = json.load(open(os.path.join(BASE, "tools_list.json")))
 NEEDS_APPROVAL = {t["name"] for t in _cfg["command_tools"] if t.get("needs_approval")}
-NEEDS_APPROVAL |= {"write_file", "bash"}
+NEEDS_APPROVAL |= {"write_file", "bash", "zap_scan"}
 
 _SEARCH_CACHE = {}
 _SEARCH_CACHE_TTL = 300
@@ -158,6 +158,18 @@ plainly in text. NEVER invent scan results, IP addresses, hostnames, CVEs, or
 findings that did not appear in a real tool result. A failed or unapproved scan
 means you report that — not imagined findings, and not a report written from
 memory.
+
+PRODUCT DISAMBIGUATION. Software that shares a name is NOT the same product.
+Before citing a CVE against a target, confirm the CVE's affected product matches
+the exact product AND version observed. Do NOT conflate: nginx (the web server,
+e.g. "nginx 1.24.0") vs ingress-nginx (the Kubernetes ingress controller —
+annotations like nginx.ingress.kubernetes.io/...) vs NGINX Plus (commercial) vs
+NGINX Unit / njs (separate components). A CVE whose affected product is
+ingress-nginx, NGINX Plus, or njs does NOT apply to a plain nginx web server
+unless that exact product is confirmed on the target. If a retrieved CVE's
+product or version does not match what was actually observed, exclude it and say
+why, rather than presenting it as applicable. This applies to all software, not
+just nginx (e.g. Apache httpd vs Apache Tomcat vs Apache Struts are distinct).
 
 Tool calls: output only the required object; exact name and schema; never
 execute destructive actions without authorized scope.
