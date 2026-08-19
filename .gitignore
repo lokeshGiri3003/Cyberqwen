@@ -1,0 +1,39 @@
+# Model weights — never commit, GitHub blocks >100MB anyway
+*.gguf
+*.bin
+*.safetensors
+
+# Python
+PAI/.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Node / Next.js
+PAI/frontend/node_modules/
+PAI/frontend/.next/
+PAI/frontend/out/
+
+# Local databases (real scan/recon/engagement data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Env / secrets
+.env
+.env.*
+*.env
+!env.example
+
+# Test/cache data
+.cognee_test_data/
+
+# Editor/OS junk
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Temp/output artifacts
+**/tmp/
+*.log

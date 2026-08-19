@@ -1,0 +1,24 @@
+{
+  "_comment": "Add a command-tool here to expose it to the model. No code editing needed. Fields: name, description (what the model reads), args (list), container (which docker container), command (template using {arg}), raw_args (true ONLY for bash-style raw commands), needs_approval.",
+
+  "command_tools": [
+    {
+      "name": "bash",
+      "description": "Run any shell command in the Kali sandbox. Security tools (nmap, gobuster, sqlmap, hydra, nikto) go here as commands.",
+      "args": ["command"],
+      "container": "kali-mcp-sandbox",
+      "command": "{command}",
+      "raw_args": true,
+      "needs_approval": true
+    },
+    {
+      "name": "read_file",
+      "description": "Read a file's contents from the Kali sandbox.",
+      "args": ["path"],
+      "container": "kali-mcp-sandbox",
+      "command": "cat {path}",
+      "raw_args": false,
+      "needs_approval": false
+    }
+  ]
+}

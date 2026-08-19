@@ -1,0 +1,21 @@
+{
+  "_comment": "Pick your model backend here. Change 'backend' to 'ollama' or 'lmstudio'. Nothing else in the code needs editing.",
+
+  "backend": "ollama",
+
+  "ollama": {
+    "chat_url":  "http://localhost:11434/api/chat",
+    "embed_url": "http://localhost:11434/api/embeddings",
+    "chat_model":  "Cyberqwen",
+    "embed_model": "nomic-embed-text"
+  },
+
+  "lmstudio": {
+    "_comment": "LM Studio: Developer tab -> Start Server. Runs on AMD/Intel/Apple GPUs (no NVIDIA needed). Load your CyberQwen GGUF and copy its exact model name from the server panel.",
+    "chat_url":  "http://localhost:1234/v1/chat/completions",
+    "embed_url": "http://localhost:1234/v1/embeddings",
+    "chat_model":  "Cyberqwen2.5-coder-7b-v2",
+    "embed_model": "nomic-embed-text",
+    "embeddings_via": "ollama"
+  }
+}

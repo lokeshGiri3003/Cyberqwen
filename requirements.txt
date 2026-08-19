@@ -1,0 +1,16 @@
+# CyberQwen PAI — Python backend dependencies.
+# (Ollama itself is installed separately; chat/embeddings go over HTTP.)
+
+fastapi>=0.110
+uvicorn[standard]>=0.29
+numpy>=1.26
+requests>=2.31
+feedparser>=6.0          # RSS ingest  (ingest_sources.py --news)
+mcp>=1.0                 # Model Context Protocol SDK (mcp_client.py / mcp_server.py)
+
+# ── NOT yet cross-verified ──────────────────────────────────────────────
+# Haven't seen mcp_client.py / mcp_server.py / web_search.py / memory.py.
+# web_search.py uses Tavily (needs TAVILY_API_KEY at runtime, not a pip dep).
+# List every module your code imports, from inside PAI/:
+#   grep -rhoE '^[[:space:]]*(import|from) [a-zA-Z0-9_]+' *.py \
+#     | awk '{print $2}' | cut -d. -f1 | sort -u
