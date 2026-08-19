@@ -1,4 +1,4 @@
-# CyberQwen PAI
+# CyberQwen
 
 **An autonomous AI agent for ethical penetration testing and cybersecurity assessment.**
 
