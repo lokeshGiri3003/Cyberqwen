@@ -80,6 +80,10 @@ Present expertise as analytical capability only.
 WRITE / CREATE / SHOW code or scripts  →  Emit RAW CODE as TEXT. Never use tools.
 RUN / EXECUTE / SCAN / DO something    →  Emit tool call ONLY: {"name":"<tool>","arguments":{...}}
 EXPLAIN / TEACH / DESIGN               →  Text only. No tools.
+Message names or closely resembles a tool in AVAILABLE TOOLS, with or without
+an explicit verb (e.g. "get_proxy_http_history in the burp tool", "get the
+proxy history") → treat as RUN: emit the tool call, do not explain the
+product's GUI instead.
 
 ═══════════════════════════════════════════════════════════════════
   WEB RESEARCH
@@ -137,10 +141,18 @@ Medium / Low.
 ═══════════════════════════════════════════════════════════════════
 
 Available tools: ONLY the exact names listed in the AVAILABLE TOOLS section
-below (appended after this system prompt) — that list is generated fresh
-every turn from what is actually connected, and can include Burp tools when
-Burp is connected. Do not invent tools, and do not assume a tool is
-unavailable just because it isn't a "core" tool — check AVAILABLE TOOLS.
+below (appended after this system prompt). That list is generated fresh every
+turn from what is actually connected right now, and includes Burp tools
+(get_proxy_http_history, send_http1_request, base64_encode, etc.) whenever
+Burp is connected — do not assume a tool is unavailable just because it is
+not "core." Do not invent tools that are not in that list either.
+
+If the user names something that matches or resembles a name in AVAILABLE
+TOOLS (e.g. "get the proxy http history", "get_proxy_http_history in the
+burp tool"), that is a request to CALL the tool, not a request to explain
+Burp Suite's GUI. Emit the tool call: {"name":"<tool>","arguments":{...}}.
+Only fall back to explaining Burp's UI if the tool is genuinely absent from
+AVAILABLE TOOLS.
 
 TOOL HONESTY. When asked what tools or capabilities you have, list ONLY the exact
 tool names in the AVAILABLE TOOLS section above — nothing else. Never describe
@@ -189,6 +201,27 @@ def build_whitelist(tool_descs):
     lines = ['AVAILABLE TOOLS:']
     for name, desc in tool_descs.items():
         lines.append(f"  {name} -> {desc}")
+    return "\n".join(lines)
+
+_TOOL_LIST_QUERY_RE = re.compile(
+    r'^\s*(what|which|list|show)\b.*\b(tools?|capabilit(y|ies)|functions?)\b.*\??\s*$',
+    re.IGNORECASE
+)
+
+def _is_tool_list_query(text):
+    """Detect 'what tools do you have' style meta-questions so we can answer
+    from the real, live tool list directly instead of routing through the
+    model — it has repeatedly ignored the TOOL HONESTY system-prompt rule
+    and answered with a generic 'I can help with...' LLM-assistant list
+    instead of its actual MCP tools. Rule-based short-circuit is more
+    reliable here than fighting it at the prompt level."""
+    return bool(_TOOL_LIST_QUERY_RE.match(text.strip()))
+
+def _tool_list_answer(agent):
+    lines = ["I have the following tools available right now:", ""]
+    for name in agent.tools:
+        tag = " (Burp)" if agent.mcp.is_burp_tool(name) else ""
+        lines.append(f"- {name}{tag}")
     return "\n".join(lines)
 
 def build_skills_list():
@@ -277,6 +310,25 @@ def _parse(text):
             print(f"  [!] Salvaged non-JSON call: {possible_tool}({args})")
             return {"name": possible_tool, "arguments": args}
 
+    return None
+
+def _bare_args_object(text):
+    """Detect a JSON object that looks like a tool call's arguments but is
+    missing the required outer {"name": ..., "arguments": {...}} wrapper —
+    e.g. the model emits {"count": 50, "offset": 0} directly instead of
+    {"name": "get_proxy_http_history", "arguments": {"count": 50, "offset": 0}}.
+    Only fires on a reply that is JUST a bare JSON object with no name key,
+    so it doesn't false-positive on normal prose that happens to mention {}.
+    """
+    t = text.strip()
+    if not (t.startswith('{') and t.endswith('}')):
+        return None
+    try:
+        obj = json.loads(t)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(obj, dict) and "name" not in obj and obj:
+        return obj
     return None
 
 def _approve(name, args):
@@ -443,6 +495,12 @@ class Agent:
         gated call) — we inject the decision's outcome and continue the
         existing step loop instead."""
         self.refresh_tools()
+        if pending_decision is None and _is_tool_list_query(user_input):
+            answer = _tool_list_answer(self)
+            if not (history is not None):
+                self.short.add("user", user_input)
+                self.short.add("assistant", answer)
+            return answer
         today = _today()
         system = BASE_SYSTEM.replace("{today}", today) + "\n\n" + self.whitelist + "\n\n" + build_skills_list() + "\n\n" + build_memory_context(user_input) + "\n\n" + build_rag_context(user_input)
         skill_content = extract_skill_reference(user_input)
@@ -498,6 +556,17 @@ class Agent:
                 messages.append({"role": "user", "content": (
                     "You used a markdown code block. When calling tools, output ONLY raw JSON with NO markdown, NO ```, and NO explanations. "
                     'Example: {"name": "zap_scan", "arguments": {"target": "https://events.rit-services.in"}}'
+                )})
+                continue
+
+            bare = _bare_args_object(reply)
+            if bare is not None:
+                print(f"  [!] Model emitted arguments only, missing 'name' wrapper: {bare}. Nudging.")
+                messages.append({"role": "assistant", "content": reply})
+                messages.append({"role": "user", "content": (
+                    f"That was only the arguments object — it's missing the required 'name' field. "
+                    f"Re-emit it as a complete tool call: "
+                    f'{{"name": "<the tool you meant>", "arguments": {json.dumps(bare)}}}'
                 )})
                 continue
 
@@ -589,6 +658,12 @@ class Agent:
 
     def chat_gen(self, user_input, ocr_text="", history=None):
         self.refresh_tools()
+        if not ocr_text and _is_tool_list_query(user_input):
+            answer = _tool_list_answer(self)
+            if history is None:
+                self.short.add("user", user_input)
+                self.short.add("assistant", answer)
+            yield ("final", answer); return
         today = _today()
         msg = user_input if not ocr_text else f"{user_input}\n\n[OCR]:\n{ocr_text}"
         system = BASE_SYSTEM.replace("{today}", today) + "\n\n" + self.whitelist + "\n\n" + build_skills_list() + "\n\n" + build_memory_context(msg) + "\n\n" + build_rag_context(msg)
@@ -616,6 +691,26 @@ class Agent:
             stuck += 1
             reply = _chat(messages)
             call = _parse(reply)
+
+            if "```" in reply and call is None:
+                print(f"  [!] Model used markdown instead of raw JSON. Nudging.")
+                messages.append({"role": "assistant", "content": reply})
+                messages.append({"role": "user", "content": (
+                    "You used a markdown code block. When calling tools, output ONLY raw JSON with NO markdown, NO ```, and NO explanations. "
+                    'Example: {"name": "zap_scan", "arguments": {"target": "https://events.rit-services.in"}}'
+                )})
+                continue
+
+            bare = _bare_args_object(reply)
+            if bare is not None:
+                print(f"  [!] Model emitted arguments only, missing 'name' wrapper: {bare}. Nudging.")
+                messages.append({"role": "assistant", "content": reply})
+                messages.append({"role": "user", "content": (
+                    f"That was only the arguments object — it's missing the required 'name' field. "
+                    f"Re-emit it as a complete tool call: "
+                    f'{{"name": "<the tool you meant>", "arguments": {json.dumps(bare)}}}'
+                )})
+                continue
 
             if call is None:
                 final = _verify_grounding(reply, tool_outputs)
