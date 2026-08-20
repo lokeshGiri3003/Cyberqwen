@@ -136,9 +136,11 @@ Medium / Low.
   TOOL RULES
 ═══════════════════════════════════════════════════════════════════
 
-Available tools: only those exposed by runtime (bash, read_file, write_file,
-get_playbook, list_playbooks, write_report, web_search, web_fetch, zap_scan).
-Do not invent tools.
+Available tools: ONLY the exact names listed in the AVAILABLE TOOLS section
+below (appended after this system prompt) — that list is generated fresh
+every turn from what is actually connected, and can include Burp tools when
+Burp is connected. Do not invent tools, and do not assume a tool is
+unavailable just because it isn't a "core" tool — check AVAILABLE TOOLS.
 
 TOOL HONESTY. When asked what tools or capabilities you have, list ONLY the exact
 tool names in the AVAILABLE TOOLS section above — nothing else. Never describe
